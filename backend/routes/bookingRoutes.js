@@ -6,11 +6,51 @@ const authenticateToken = require('../middleware/auth');
 // Protect all booking routes
 router.use(authenticateToken);
 
-// API to book a room
-router.post('/bookings', async (req, res) => {
-  const { room_id, employee_id, start_time, end_time, title } = req.body;
+// Get all bookings
+router.get('/bookings', async (req, res) => {
+  try {
+    const [bookings] = await pool.query(
+      `SELECT b.*, r.name as roomName, r.location, r.capacity
+       FROM bookings b
+       JOIN rooms r ON b.roomId = r.id
+       WHERE b.isCancelled = 0
+       ORDER BY b.startTime DESC`
+    );
+    res.json(bookings);
+  } catch (err) {
+    console.error('Error fetching bookings:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
-  if (!room_id || !employee_id || !start_time || !end_time) {
+// Get booking by ID
+router.get('/bookings/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [bookings] = await pool.query(
+      `SELECT b.*, r.name as roomName, r.location, r.capacity
+       FROM bookings b
+       JOIN rooms r ON b.roomId = r.id
+       WHERE b.id = ?`,
+      [id]
+    );
+    
+    if (bookings.length === 0) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+    
+    res.json(bookings[0]);
+  } catch (err) {
+    console.error('Error fetching booking:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Create new booking
+router.post('/bookings', async (req, res) => {
+  const { roomId, employeeId, startTime, endTime, title } = req.body;
+
+  if (!roomId || !employeeId || !startTime || !endTime) {
     return res.status(400).json({ message: 'Missing required booking fields' });
   }
 
@@ -18,11 +58,14 @@ router.post('/bookings', async (req, res) => {
     // Check for overlapping bookings before inserting
     const [overlappingBookings] = await pool.query(
       `SELECT * FROM bookings
-       WHERE room_id = ?
+       WHERE roomId = ?
+       AND isCancelled = 0
        AND (
-         (start_time < ? AND end_time > ?)
+         (startTime < ? AND endTime > ?)
+         OR (startTime < ? AND endTime > ?)
+         OR (startTime >= ? AND endTime <= ?)
        )`,
-      [room_id, end_time, start_time]
+      [roomId, endTime, startTime, endTime, startTime, startTime, endTime]
     );
 
     if (overlappingBookings.length > 0) {
@@ -30,8 +73,8 @@ router.post('/bookings', async (req, res) => {
     }
 
     const [result] = await pool.query(
-      'INSERT INTO bookings (room_id, employee_id, start_time, end_time, title) VALUES (?, ?, ?, ?, ?)',
-      [room_id, employee_id, start_time, end_time, title]
+      'INSERT INTO bookings (roomId, employeeId, startTime, endTime, title) VALUES (?, ?, ?, ?, ?)',
+      [roomId, employeeId, startTime, endTime, title]
     );
     res.status(201).json({ message: 'Booking created successfully', bookingId: result.insertId });
   } catch (err) {
@@ -40,36 +83,113 @@ router.post('/bookings', async (req, res) => {
   }
 });
 
-// API to get bookings for a specific employee
-router.get('/bookings/employee/:employeeId', async (req, res) => {
-  const { employeeId } = req.params;
+// Update booking
+router.put('/bookings/:id', async (req, res) => {
+  const { id } = req.params;
+  const { startTime, endTime, title } = req.body;
+
+  if (!startTime || !endTime) {
+    return res.status(400).json({ message: 'Missing required booking fields' });
+  }
+
   try {
-    const [rows] = await pool.query(
-      `SELECT b.*, r.name as room_name, r.location
-       FROM bookings b
-       JOIN rooms r ON b.room_id = r.id
-       WHERE b.employee_id = ?
-       ORDER BY b.start_time DESC`,
-      [employeeId]
+    // Check if booking exists and is not cancelled
+    const [existingBooking] = await pool.query(
+      'SELECT * FROM bookings WHERE id = ? AND isCancelled = 0',
+      [id]
     );
-    res.json(rows);
+
+    if (existingBooking.length === 0) {
+      return res.status(404).json({ message: 'Booking not found or already cancelled' });
+    }
+
+    // Check for overlapping bookings excluding current booking
+    const [overlappingBookings] = await pool.query(
+      `SELECT * FROM bookings
+       WHERE roomId = ?
+       AND id != ?
+       AND isCancelled = 0
+       AND (
+         (startTime < ? AND endTime > ?)
+         OR (startTime < ? AND endTime > ?)
+         OR (startTime >= ? AND endTime <= ?)
+       )`,
+      [existingBooking[0].roomId, id, endTime, startTime, endTime, startTime, startTime, endTime]
+    );
+
+    if (overlappingBookings.length > 0) {
+      return res.status(409).json({ message: 'Room is already booked for the selected time' });
+    }
+
+    const [result] = await pool.query(
+      'UPDATE bookings SET startTime = ?, endTime = ?, title = ? WHERE id = ?',
+      [startTime, endTime, title, id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    res.json({ message: 'Booking updated successfully' });
   } catch (err) {
-    console.error('Error fetching employee bookings:', err);
+    console.error('Error updating booking:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-// API to cancel a booking
-router.delete('/bookings/:bookingId', async (req, res) => {
-  const { bookingId } = req.params;
+// Cancel booking (soft delete)
+router.patch('/bookings/:id/cancel', async (req, res) => {
+  const { id } = req.params;
   try {
-    const [result] = await pool.query('DELETE FROM bookings WHERE id = ?', [bookingId]);
+    const [result] = await pool.query(
+      'UPDATE bookings SET isCancelled = 1 WHERE id = ?',
+      [id]
+    );
+    
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: 'Booking not found' });
     }
+    
     res.json({ message: 'Booking cancelled successfully' });
   } catch (err) {
     console.error('Error cancelling booking:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Delete booking (hard delete)
+router.delete('/bookings/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [result] = await pool.query('DELETE FROM bookings WHERE id = ?', [id]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+    
+    res.json({ message: 'Booking deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting booking:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get bookings for a specific employee
+router.get('/bookings/employee/:employeeId', async (req, res) => {
+  const { employeeId } = req.params;
+  try {
+    const [bookings] = await pool.query(
+      `SELECT b.*, r.name as roomName, r.location, r.capacity
+       FROM bookings b
+       JOIN rooms r ON b.roomId = r.id
+       WHERE b.employeeId = ?
+       AND b.isCancelled = 0
+       ORDER BY b.startTime DESC`,
+      [employeeId]
+    );
+    res.json(bookings);
+  } catch (err) {
+    console.error('Error fetching employee bookings:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
