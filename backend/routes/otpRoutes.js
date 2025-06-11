@@ -72,23 +72,67 @@ router.post('/verify-otp', async (req, res) => {
   if (!phone || !otp) {
     return res.status(400).json({ message: 'Phone number and OTP are required' });
   }
+
+  console.log("", `Verifying OTP for phone: ${phone}, OTP: ${otp}`);
+  
+  
+
   const options = {
     method: 'GET',
     url: 'https://control.msg91.com/api/v5/otp/verify',
     params: { otp: otp, mobile: `+91${phone}` },
     headers: { authkey: MSG91_AUTH_KEY }
   };
+
   try {
     const { data } = await axios.request(options);
     if (data && data.type === 'success') {
-      await pool.query('UPDATE users SET is_verified = TRUE, otp = NULL, otp_expiry = NULL WHERE phone_number = ?', [phone]);
+      // Get user data after successful OTP verification
+      const [users] = await pool.query(
+        'SELECT * FROM users WHERE phone_number = ?',
+        [phone]
+      );
+
+      if (users.length === 0) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      const user = users[0];
+
+      // Update user verification status
+      await pool.query(
+        'UPDATE users SET is_verified = TRUE, otp = NULL, otp_expiry = NULL WHERE phone_number = ?',
+        [phone]
+      );
+
       // Generate JWT token
-      const token = jwt.sign({ phone }, JWT_SECRET, { expiresIn: '1d' });
-      res.status(200).json({ message: 'OTP verified successfully', verified: true, token });
+      const token = jwt.sign(
+        { id: user.id, phone: user.phone_number, role: user.role },
+        JWT_SECRET,
+        { expiresIn: '1d' }
+      );
+
+      // Return user data and token
+      res.status(200).json({
+        message: 'OTP verified successfully',
+        verified: true,
+        token,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone_number,
+          role: user.role,
+          department: user.department,
+          position: user.position,
+          employeeId: user.employeeId
+        }
+      });
     } else {
       res.status(401).json({ message: data.message || 'Invalid or expired OTP', verified: false });
     }
   } catch (error) {
+    console.error('Error verifying OTP:', error);
     res.status(500).json({ message: 'Failed to verify OTP', error: error.message });
   }
 });
