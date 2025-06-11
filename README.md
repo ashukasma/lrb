@@ -1,70 +1,105 @@
-# Getting Started with Create React App
+# Lucent Office Meeting Room Booking Portal
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A modern web application for booking and managing meeting rooms at Lucent Innovation. The portal allows users to book conference rooms, manage schedules, and track usage analytics.
 
-## Available Scripts
+## Features
 
-In the project directory, you can run:
+- Secure login with OTP verification (email or phone)
+- Dashboard for booking and managing meeting rooms
+- Responsive UI built with React, Vite, Tailwind CSS, and shadcn-ui
+- Backend API for authentication and room management
 
-### `npm start`
+## Project Structure
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+```
+backend/
+  db.js
+  server.js
+  middleware/
+    auth.js
+  routes/
+    bookingRoutes.js
+    otpRoutes.js
+    roomRoutes.js
+    userRoutes.js
+frontend/
+  src/
+    App.tsx
+    main.tsx
+    pages/
+      auth/
+        LoginScreen.tsx
+  public/
+  index.html
+  package.json
+```
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## Technologies Used
 
-### `npm test`
+- **Frontend:** React, TypeScript, Vite, Tailwind CSS, shadcn-ui
+- **Backend:** Node.js, Express
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## Getting Started
 
-### `npm run build`
+### Prerequisites
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+- Node.js (use [nvm](https://github.com/nvm-sh/nvm#installing-and-updating) for easy installation)
+- npm
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### Setup
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+#### 1. Clone the repository
 
-### `npm run eject`
+```sh
+git clone <YOUR_GIT_URL>
+cd <YOUR_PROJECT_NAME>
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+#### 2. Install dependencies
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+```sh
+# For frontend
+cd frontend
+npm install
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+# For backend
+cd ../backend
+npm install
+```
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+#### 3. Configure environment variables
 
-## Learn More
+- Copy `.env.example` to `.env` in both `frontend/` and `backend/` and update values as needed.
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+#### 4. Start the development servers
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+```sh
+# In one terminal, start the backend
+cd backend
+npm start
 
-### Code Splitting
+# In another terminal, start the frontend
+cd frontend
+npm run dev
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+- Frontend: [http://localhost:5173](http://localhost:5173)
+- Backend: [http://localhost:3000](http://localhost:3000)
 
-### Analyzing the Bundle Size
+## Deployment
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+- The frontend can be deployed using [Lovable](https://lovable.dev/projects/9c303eec-623f-4b93-9026-6bf304c822a8) or any static hosting provider.
+- The backend can be deployed to any Node.js-compatible server.
 
-### Making a Progressive Web App
+## Custom Domain
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+To connect a custom domain, follow the instructions in the Lovable dashboard under Project > Settings > Domains.
 
-### Advanced Configuration
+## License
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+MIT
 
-### Deployment
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+**Ashish Kasama**
+**Lucent Innovation**
