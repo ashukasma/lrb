@@ -20,7 +20,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'rooms', label: 'Rooms', icon: Users, path: '/rooms' },
     { id: 'bookings', label: 'Bookings', icon: Calendar, path: '/bookings' },
     { id: 'users', label: 'Users', icon: Users, path: '/users' },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3, path: '/analytics' },
   ];
 
   return (

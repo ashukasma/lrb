@@ -9,7 +9,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Calendar as CalendarIcon, Filter, Search, Clock } from 'lucide-react';
+import { Calendar as CalendarIcon, Filter, Clock, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/components/ui/use-toast';
@@ -17,7 +17,7 @@ import { useToast } from '@/components/ui/use-toast';
 interface Booking {
   id: number;
   roomId: number;
-  employeeId: string;
+  userId: string;
   startTime: string;
   endTime: string;
   title: string;
@@ -38,21 +38,44 @@ interface User {
   name: string;
 }
 
+interface PaginationInfo {
+  total: number;
+  offset: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+interface FiltersInfo {
+  sortBy: string;
+  sortOrder: string;
+}
+
+interface PaginatedResponse {
+  bookings: Booking[];
+  pagination: PaginationInfo;
+  filters: FiltersInfo;
+}
+
 export const BookingsPage: React.FC = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
   const [userFilter, setUserFilter] = useState('all');
   const [roomFilter, setRoomFilter] = useState('all');
   const [showPast, setShowPast] = useState(true);
   const [dateFrom, setDateFrom] = useState<Date>();
   const [dateTo, setDateTo] = useState<Date>();
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [sortBy, setSortBy] = useState('startTime');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [totalItems, setTotalItems] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [offset, setOffset] = useState(0);
   const { toast } = useToast();
 
-  // Fetch bookings
+  // Fetch bookings with pagination
   useEffect(() => {
     const fetchBookings = async () => {
       try {
@@ -61,8 +84,19 @@ export const BookingsPage: React.FC = () => {
           throw new Error('No token found');
         }
 
+        // Build query parameters
+        const params = new URLSearchParams({
+          offset: offset.toString(),
+          limit: itemsPerPage.toString(),
+          sortBy,
+          sortOrder,
+          ...(userFilter !== 'all' && { userId: userFilter }),
+          ...(roomFilter !== 'all' && { roomId: roomFilter }),
+          ...(showPast && { includePast: 'true' })
+        });
+
         const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/bookings?limit=100`,
+          `${import.meta.env.VITE_API_URL}/bookings?${params.toString()}`,
           {
             headers: {
               'Authorization': `Bearer ${token}`
@@ -74,8 +108,11 @@ export const BookingsPage: React.FC = () => {
           throw new Error('Failed to fetch bookings');
         }
 
-        const data = await response.json();
+        const data: PaginatedResponse = await response.json();
         setBookings(data.bookings);
+        setTotalItems(data.pagination.total);
+        setHasMore(data.pagination.hasMore);
+        setOffset(data.pagination.offset);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
         toast({
@@ -89,7 +126,16 @@ export const BookingsPage: React.FC = () => {
     };
 
     fetchBookings();
-  }, [toast]);
+  }, [
+    offset,
+    itemsPerPage,
+    sortBy,
+    sortOrder,
+    userFilter,
+    roomFilter,
+    showPast,
+    toast
+  ]);
 
   // Fetch rooms
   useEffect(() => {
@@ -129,7 +175,7 @@ export const BookingsPage: React.FC = () => {
         if (!token) return;
 
         const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/users`,
+          `${import.meta.env.VITE_API_URL}/users?limit=1000`,
           {
             headers: {
               'Authorization': `Bearer ${token}`
@@ -142,7 +188,7 @@ export const BookingsPage: React.FC = () => {
         }
 
         const data = await response.json();
-        setUsers(data);
+        setUsers(data.users);
       } catch (err) {
         console.error('Error fetching users:', err);
       }
@@ -151,24 +197,46 @@ export const BookingsPage: React.FC = () => {
     fetchUsers();
   }, []);
 
-  const filteredBookings = bookings.filter(booking => {
-    const matchesSearch =
-      booking.roomName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      booking.employeeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      booking.title.toLowerCase().includes(searchTerm.toLowerCase());
+  const handlePageChange = (newOffset: number) => {
+    setOffset(newOffset);
+  };
 
-    const matchesUser = userFilter === 'all' || booking.employeeId === userFilter;
-    const matchesRoom = roomFilter === 'all' || booking.roomId.toString() === roomFilter;
-    const matchesTimeframe = showPast || new Date(booking.startTime) > new Date();
+  const handleSort = (field: string) => {
+    if (sortBy === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(field);
+      setSortOrder('asc');
+    }
+  };
 
-    let matchesDateRange = true;
-    if (dateFrom && dateTo) {
-      const bookingDate = new Date(booking.startTime);
-      matchesDateRange = bookingDate >= dateFrom && bookingDate <= dateTo;
+  // Calculate total pages and current page based on server response
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const currentPage = Math.floor(offset / itemsPerPage) + 1;
+
+  const getBookingStatus = (booking: Booking) => {
+    const now = new Date();
+    const startTime = new Date(booking.startTime);
+
+    if (booking.isCancelled) {
+      return {
+        label: 'Cancelled',
+        variant: 'destructive' as const
+      };
     }
 
-    return matchesSearch && matchesUser && matchesRoom && matchesTimeframe && matchesDateRange;
-  });
+    if (startTime < now) {
+      return {
+        label: 'Past',
+        variant: 'secondary' as const
+      };
+    }
+
+    return {
+      label: 'Upcoming',
+      variant: 'default' as const
+    };
+  };
 
   if (isLoading) {
     return (
@@ -195,7 +263,7 @@ export const BookingsPage: React.FC = () => {
         </p>
       </div>
 
-      {/* Filters */}
+      {/* Enhanced Filters */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
@@ -204,19 +272,10 @@ export const BookingsPage: React.FC = () => {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search bookings..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Select value={userFilter} onValueChange={setUserFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Filter by user" />
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select User" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Users</SelectItem>
@@ -228,8 +287,8 @@ export const BookingsPage: React.FC = () => {
               </SelectContent>
             </Select>
             <Select value={roomFilter} onValueChange={setRoomFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Filter by room" />
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select Room" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Rooms</SelectItem>
@@ -240,14 +299,6 @@ export const BookingsPage: React.FC = () => {
                 ))}
               </SelectContent>
             </Select>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="show-past"
-                checked={showPast}
-                onCheckedChange={setShowPast}
-              />
-              <Label htmlFor="show-past">Include Past</Label>
-            </div>
           </div>
 
           {/* Date Range */}
@@ -259,7 +310,7 @@ export const BookingsPage: React.FC = () => {
                   <Button
                     variant="outline"
                     className={cn(
-                      "justify-start text-left font-normal",
+                      "w-full justify-start text-left font-normal",
                       !dateFrom && "text-muted-foreground"
                     )}
                   >
@@ -285,7 +336,7 @@ export const BookingsPage: React.FC = () => {
                   <Button
                     variant="outline"
                     className={cn(
-                      "justify-start text-left font-normal",
+                      "w-full justify-start text-left font-normal",
                       !dateTo && "text-muted-foreground"
                     )}
                   >
@@ -305,15 +356,35 @@ export const BookingsPage: React.FC = () => {
               </Popover>
             </div>
           </div>
+
+          {/* Items per page selector */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Label>Items per page:</Label>
+              <Select value={itemsPerPage.toString()} onValueChange={(value) => setItemsPerPage(Number(value))}>
+                <SelectTrigger className="w-[100px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">5 per page</SelectItem>
+                  <SelectItem value="10">10 per page</SelectItem>
+                  <SelectItem value="20">20 per page</SelectItem>
+                  <SelectItem value="50">50 per page</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
       {/* Bookings Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center">
-            <Clock className="w-5 h-5 mr-2" />
-            Bookings List ({filteredBookings.length})
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center">
+              <Clock className="w-5 h-5 mr-2" />
+              Bookings List ({totalItems})
+            </div>
           </CardTitle>
           <CardDescription>
             All room bookings with detailed information
@@ -324,101 +395,179 @@ export const BookingsPage: React.FC = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Room</TableHead>
-                  <TableHead>User</TableHead>
-                  <TableHead>Date</TableHead>
+                  <TableHead
+                    className="cursor-pointer"
+                    onClick={() => handleSort('roomName')}
+                  >
+                    Room {sortBy === 'roomName' && (sortOrder === 'asc' ? '↑' : '↓')}
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer"
+                    onClick={() => handleSort('employeeName')}
+                  >
+                    User {sortBy === 'employeeName' && (sortOrder === 'asc' ? '↑' : '↓')}
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer"
+                    onClick={() => handleSort('startTime')}
+                  >
+                    Date {sortBy === 'startTime' && (sortOrder === 'asc' ? '↑' : '↓')}
+                  </TableHead>
                   <TableHead>Time Slot</TableHead>
                   <TableHead>Reason</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead
+                    className="cursor-pointer"
+                    onClick={() => handleSort('isCancelled')}
+                  >
+                    Status {sortBy === 'isCancelled' && (sortOrder === 'asc' ? '↑' : '↓')}
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredBookings.map((booking) => (
-                  <TableRow key={booking.id}>
-                    <TableCell className="font-medium">{booking.roomName}</TableCell>
-                    <TableCell>{booking.employeeName}</TableCell>
-                    <TableCell>
-                      {new Date(booking.startTime).toLocaleDateString('en-US', {
-                        month: 'long',
-                        day: 'numeric',
-                        year: 'numeric'
-                      })}
-                    </TableCell>
-                    <TableCell>
-                      {new Date(booking.startTime).toLocaleTimeString('en-US', {
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        hour12: true
-                      })} - {new Date(booking.endTime).toLocaleTimeString('en-US', {
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        hour12: true
-                      })}
-                    </TableCell>
-                    <TableCell className="max-w-xs truncate" title={booking.title}>
-                      {booking.title}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          booking.isCancelled ? "destructive" :
-                            new Date(booking.startTime) > new Date() ? "default" : "secondary"
-                        }
-                      >
-                        {booking.isCancelled ? 'Cancelled' :
-                          new Date(booking.startTime) > new Date() ? 'Upcoming' : 'Past'}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {bookings.map((booking) => {
+                  const status = getBookingStatus(booking);
+                  return (
+                    <TableRow key={booking.id}>
+                      <TableCell className="font-medium">{booking.roomName}</TableCell>
+                      <TableCell>{booking.employeeName}</TableCell>
+                      <TableCell>
+                        {new Date(booking.startTime).toLocaleDateString('en-US', {
+                          month: 'long',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
+                      </TableCell>
+                      <TableCell>
+                        {new Date(booking.startTime).toLocaleTimeString('en-US', {
+                          hour: 'numeric',
+                          minute: '2-digit',
+                          hour12: true
+                        })} - {new Date(booking.endTime).toLocaleTimeString('en-US', {
+                          hour: 'numeric',
+                          minute: '2-digit',
+                          hour12: true
+                        })}
+                      </TableCell>
+                      <TableCell className="max-w-xs truncate" title={booking.title}>
+                        {booking.title}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={status.variant}>
+                          {status.label}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
+
+          {/* Pagination Controls */}
+          {totalItems > 0 && (
+            <div className="flex items-center justify-between mt-4">
+              <div className="text-sm text-muted-foreground">
+                Showing {offset + 1} to {Math.min(offset + itemsPerPage, totalItems)} of {totalItems} bookings
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(Math.max(0, offset - itemsPerPage))}
+                  disabled={offset === 0}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <Button
+                    key={page}
+                    variant={currentPage === page ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handlePageChange((page - 1) * itemsPerPage)}
+                  >
+                    {page}
+                  </Button>
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(offset + itemsPerPage)}
+                  disabled={!hasMore}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Mobile Card View */}
+      {/* Mobile Card View with Pagination */}
       <div className="md:hidden space-y-4">
-        {filteredBookings.map((booking) => (
-          <Card key={booking.id}>
-            <CardContent className="p-4">
-              <div className="space-y-2">
-                <div className="flex justify-between items-start">
-                  <h3 className="font-medium">{booking.roomName}</h3>
-                  <Badge
-                    variant={
-                      booking.isCancelled ? "destructive" :
-                        new Date(booking.startTime) > new Date() ? "default" : "secondary"
-                    }
-                  >
-                    {booking.isCancelled ? 'Cancelled' :
-                      new Date(booking.startTime) > new Date() ? 'Upcoming' : 'Past'}
-                  </Badge>
+        {bookings.map((booking) => {
+          const status = getBookingStatus(booking);
+          return (
+            <Card key={booking.id}>
+              <CardContent className="p-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between items-start">
+                    <h3 className="font-medium">{booking.roomName}</h3>
+                    <Badge variant={status.variant}>
+                      {status.label}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">by {booking.employeeName}</p>
+                  <p className="text-sm">
+                    {new Date(booking.startTime).toLocaleDateString('en-US', {
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric'
+                    })}
+                  </p>
+                  <p className="text-sm">
+                    {new Date(booking.startTime).toLocaleTimeString('en-US', {
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      hour12: true
+                    })} - {new Date(booking.endTime).toLocaleTimeString('en-US', {
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      hour12: true
+                    })}
+                  </p>
+                  <p className="text-sm text-muted-foreground">{booking.title}</p>
                 </div>
-                <p className="text-sm text-muted-foreground">by {booking.employeeName}</p>
-                <p className="text-sm">
-                  {new Date(booking.startTime).toLocaleDateString('en-US', {
-                    month: 'long',
-                    day: 'numeric',
-                    year: 'numeric'
-                  })}
-                </p>
-                <p className="text-sm">
-                  {new Date(booking.startTime).toLocaleTimeString('en-US', {
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    hour12: true
-                  })} - {new Date(booking.endTime).toLocaleTimeString('en-US', {
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    hour12: true
-                  })}
-                </p>
-                <p className="text-sm text-muted-foreground">{booking.title}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          );
+        })}
+
+        {/* Mobile Pagination */}
+        {totalItems > 0 && (
+          <div className="flex items-center justify-between mt-4">
+            <div className="text-sm text-muted-foreground">
+              Page {currentPage} of {totalPages}
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(Math.max(0, offset - itemsPerPage))}
+                disabled={offset === 0}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(offset + itemsPerPage)}
+                disabled={!hasMore}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

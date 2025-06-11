@@ -15,7 +15,10 @@ router.get('/bookings', async (req, res) => {
     const sortOrder = req.query.sortOrder?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
     const startDate = req.query.startDate;
     const roomId = req.query.roomId;
-    const employeeId = req.query.employeeId;
+    const userId = req.query.userId;
+
+    console.log(req.query);
+    
 
     // Build WHERE clause based on filters
     let whereClause = 'WHERE b.isCancelled = 0';
@@ -31,9 +34,9 @@ router.get('/bookings', async (req, res) => {
       queryParams.push(roomId);
     }
 
-    if (employeeId) {
-      whereClause += ' AND b.employeeId = ?';
-      queryParams.push(employeeId);
+    if (userId) {
+      whereClause += ' AND b.userId = ?';
+      queryParams.push(userId);
     }
 
     // Get total count for pagination
@@ -43,6 +46,9 @@ router.get('/bookings', async (req, res) => {
        ${whereClause}`,
       queryParams
     );
+
+    
+
     const total = countResult[0].total;
 
     // Validate sortBy to prevent SQL injection
@@ -54,7 +60,7 @@ router.get('/bookings', async (req, res) => {
       `SELECT b.*, r.name as roomName, r.location, r.capacity, u.name as employeeName
        FROM bookings b
        JOIN rooms r ON b.roomId = r.id
-       JOIN users u ON b.employeeId = u.id
+       JOIN users u ON b.userId = u.id
        ${whereClause}
        ORDER BY ${finalSortBy} ${sortOrder}
        LIMIT ? OFFSET ?`,
@@ -72,7 +78,7 @@ router.get('/bookings', async (req, res) => {
       filters: {
         startDate,
         roomId,
-        employeeId,
+        userId,
         sortBy: finalSortBy,
         sortOrder
       }
@@ -91,7 +97,7 @@ router.get('/bookings/:id', async (req, res) => {
       `SELECT b.*, r.name as roomName, r.location, r.capacity, u.name as employeeName
        FROM bookings b
        JOIN rooms r ON b.roomId = r.id
-       JOIN users u ON b.employeeId = u.id
+       JOIN users u ON b.userId = u.id
        WHERE b.id = ?`,
       [id]
     );
@@ -109,7 +115,7 @@ router.get('/bookings/:id', async (req, res) => {
 
 // Create booking
 router.post('/bookings', async (req, res) => {
-  const { roomId, employeeId, startTime, endTime, title } = req.body;
+  const { roomId, userId, startTime, endTime, title } = req.body;
 
   try {
     // Format datetime for MySQL (YYYY-MM-DD HH:mm:ss)
@@ -139,8 +145,8 @@ router.post('/bookings', async (req, res) => {
 
     // Create booking
     const [result] = await pool.query(
-      'INSERT INTO bookings (roomId, employeeId, startTime, endTime, title) VALUES (?, ?, ?, ?, ?)',
-      [roomId, employeeId, formattedStartTime, formattedEndTime, title]
+      'INSERT INTO bookings (roomId, userId, startTime, endTime, title) VALUES (?, ?, ?, ?, ?)',
+      [roomId, userId, formattedStartTime, formattedEndTime, title]
     );
 
     res.status(201).json({
@@ -245,48 +251,48 @@ router.delete('/bookings/:id', async (req, res) => {
 });
 
 // Get bookings for a specific employee
-router.get('/bookings/employee/:employeeId', async (req, res) => {
-  const { employeeId } = req.params;
-  try {
-    const offset = parseInt(req.query.offset) || 0;
-    const limit = parseInt(req.query.limit) || 10;
+// router.get('/bookings/employee/:userId', async (req, res) => {
+//   const { userId } = req.params;
+//   try {
+//     const offset = parseInt(req.query.offset) || 0;
+//     const limit = parseInt(req.query.limit) || 10;
 
-    // Get total count for pagination
-    const [countResult] = await pool.query(
-      `SELECT COUNT(*) as total
-       FROM bookings b
-       WHERE b.employeeId = ?
-       AND b.isCancelled = 0`,
-      [employeeId]
-    );
-    const total = countResult[0].total;
+//     // Get total count for pagination
+//     const [countResult] = await pool.query(
+//       `SELECT COUNT(*) as total
+//        FROM bookings b
+//        WHERE b.userId = ?
+//        AND b.isCancelled = 0`,
+//       [userId]
+//     );
+//     const total = countResult[0].total;
 
-    // Get paginated bookings
-    const [bookings] = await pool.query(
-      `SELECT b.*, r.name as roomName, r.location, r.capacity, u.name as employeeName
-       FROM bookings b
-       JOIN rooms r ON b.roomId = r.id
-       JOIN users u ON b.employeeId = u.id
-       WHERE b.employeeId = ?
-       AND b.isCancelled = 0
-       ORDER BY b.startTime DESC
-       LIMIT ? OFFSET ?`,
-      [employeeId, limit, offset]
-    );
+//     // Get paginated bookings
+//     const [bookings] = await pool.query(
+//       `SELECT b.*, r.name as roomName, r.location, r.capacity, u.name as employeeName
+//        FROM bookings b
+//        JOIN rooms r ON b.roomId = r.id
+//        JOIN users u ON b.userId = u.id
+//        WHERE b.userId = ?
+//        AND b.isCancelled = 0
+//        ORDER BY b.startTime DESC
+//        LIMIT ? OFFSET ?`,
+//       [userId, limit, offset]
+//     );
 
-    res.json({
-      bookings,
-      pagination: {
-        total,
-        offset,
-        limit,
-        hasMore: offset + limit < total
-      }
-    });
-  } catch (err) {
-    console.error('Error fetching employee bookings:', err);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
+//     res.json({
+//       bookings,
+//       pagination: {
+//         total,
+//         offset,
+//         limit,
+//         hasMore: offset + limit < total
+//       }
+//     });
+//   } catch (err) {
+//     console.error('Error fetching employee bookings:', err);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// });
 
 module.exports = router;

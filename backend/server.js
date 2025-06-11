@@ -7,6 +7,7 @@ const otpRoutes = require('./routes/otpRoutes');
 const roomRoutes = require('./routes/roomRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
 const authenticateToken = require('./middleware/auth');
+const userRoutes = require('./routes/userRoutes');
 
 const app = express();
 const port = process.env.PORT || 5001;
@@ -24,6 +25,8 @@ app.use('/api', otpRoutes);
 app.use('/api', roomRoutes);
 // Use Booking routes
 app.use('/api', bookingRoutes);
+// Use User routes
+app.use('/api', userRoutes);
 
 // Protected endpoint example
 app.get('/api/protected', authenticateToken, (req, res) => {

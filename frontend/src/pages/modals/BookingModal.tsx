@@ -179,9 +179,9 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     try {
       setIsLoading(true);
       const token = localStorage.getItem('token');
-      const employeeId = localStorage.getItem('employeeId');
+      const userId = localStorage.getItem('user').id;
 
-      if (!token || !employeeId) {
+      if (!token || !userId) {
         toast({
           title: "Error",
           description: "Please login to book a room",
@@ -225,7 +225,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
         },
         body: JSON.stringify({
           roomId: room?.id,
-          employeeId,
+          userId,
           startTime: startDateTime.toISOString(),
           endTime: endDateTime.toISOString(),
           title: reason

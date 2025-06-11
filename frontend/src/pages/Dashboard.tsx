@@ -22,7 +22,7 @@ interface Room {
 interface Booking {
   id: number;
   roomId: number;
-  employeeId: string;
+  userId: string;
   startTime: string;
   endTime: string;
   title: string;
