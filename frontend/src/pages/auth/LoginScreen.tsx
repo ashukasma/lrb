@@ -23,6 +23,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSendOTP = async () => {
     if (!email && !phone) {
@@ -40,6 +41,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
     const url = `${import.meta.env.VITE_API_URL}/send-otp`;
     const response = await fetch(url, {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({ email, phone }),
     });
     const data = await response.json();
@@ -62,35 +66,37 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   };
 
   const handleVerifyOTP = async () => {
-    if (otp !== '123456') {
-      toast({
-        title: "Invalid OTP",
-        description: "Please enter the correct verification code",
-        variant: "destructive"
+    try {
+      const url = `${import.meta.env.VITE_API_URL}/verify-otp`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ phone, otp })
       });
-      return;
-    }
-    const url = `${import.meta.env.VITE_API_URL}/verify-otp`;
-    const response = await fetch(url, {
-      method: 'POST',
-      body: JSON.stringify({ phone, otp }),
-    });
-    const data = await response.json();
-    console.log(data);
-    if (data.token) {
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('isAuthenticated', 'true');
-      navigate('/dashboard');
-    }
-    else {
-      localStorage.setItem('isAuthenticated', 'false');
-    }
 
-    onLogin({
-      name: "John Doe",
-      email: email || "user@lucent.com",
-      phone: phone || "+1234567890"
-    });
+      const data = await response.json();
+
+      if (data.verified) {
+        // Store token
+        localStorage.setItem('isAuthenticated', 'true');
+        localStorage.setItem('token', data.token);
+
+        // Store user data
+        localStorage.setItem('user', JSON.stringify(data.user));
+        localStorage.setItem('employeeId', data.user.employeeId);
+
+        // Use actual user data from API response
+        onLogin(data.user);
+      }
+      else {
+        localStorage.setItem('isAuthenticated', 'false');
+      }
+    } catch (error) {
+      console.error('Error verifying OTP:', error);
+      setError(error instanceof Error ? error.message : 'Failed to verify OTP');
+    }
   };
 
   return (

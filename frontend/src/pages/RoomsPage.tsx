@@ -1,5 +1,5 @@
-
 import React, { useState } from 'react';
+import { useRooms } from '@/hooks/useRooms';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,110 +12,148 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Edit, Trash2, Calendar, Filter, Search } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
-const sampleRooms = [
-  {
-    id: 1,
-    name: "Conference Room Alpha",
-    capacity: 12,
-    location: "Floor 1",
-    phone: "+1-555-0101",
-    chairs: 12,
-    hasTV: true,
-    hasMonitor: true,
-    hasBoard: true,
-    isWorking: true
-  },
-  {
-    id: 2,
-    name: "Meeting Room Beta",
-    capacity: 6,
-    location: "Floor 2",
-    phone: "+1-555-0102",
-    chairs: 6,
-    hasTV: false,
-    hasMonitor: true,
-    hasBoard: true,
-    isWorking: true
-  },
-  {
-    id: 3,
-    name: "Executive Suite",
-    capacity: 8,
-    location: "Floor 3",
-    phone: "+1-555-0103",
-    chairs: 8,
-    hasTV: true,
-    hasMonitor: true,
-    hasBoard: false,
-    isWorking: false
-  }
-];
-
 export const RoomsPage: React.FC = () => {
-  const [rooms, setRooms] = useState(sampleRooms);
+  const { rooms, isLoading, error, addRoom, editRoom, deleteRoom } = useRooms();
   const [showAddRoom, setShowAddRoom] = useState(false);
-  const [editingRoom, setEditingRoom] = useState<any>(null);
+  const [editingRoom, setEditingRoom] = useState<{ id: string; data: typeof roomForm } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [locationFilter, setLocationFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  
+
   const [roomForm, setRoomForm] = useState({
     name: '',
     capacity: '',
     location: '',
     phone: '',
-    chairs: '',
-    hasTV: false,
-    hasMonitor: false,
-    hasBoard: false,
-    isWorking: true
+    noOfChairs: '',
+    hasTV: 0,
+    hasMonitor: 0,
+    hasBoard: 0,
+    isWorking: 1
   });
 
-  const handleAddRoom = () => {
-    const newRoom = {
-      ...roomForm,
-      id: rooms.length + 1,
-      capacity: parseInt(roomForm.capacity),
-      chairs: parseInt(roomForm.chairs)
-    };
-    setRooms([...rooms, newRoom]);
+  const resetForm = () => {
     setRoomForm({
       name: '',
       capacity: '',
       location: '',
       phone: '',
-      chairs: '',
-      hasTV: false,
-      hasMonitor: false,
-      hasBoard: false,
-      isWorking: true
+      noOfChairs: '',
+      hasTV: 0,
+      hasMonitor: 0,
+      hasBoard: 0,
+      isWorking: 1
     });
-    setShowAddRoom(false);
-    toast({
-      title: "Room Added",
-      description: `${roomForm.name} has been added successfully`,
-    });
+    setEditingRoom(null);
   };
 
-  const handleDeleteRoom = (id: number) => {
-    setRooms(rooms.filter(room => room.id !== id));
-    toast({
-      title: "Room Deleted",
-      description: "Room has been removed successfully",
-    });
+  const handleAddRoom = async () => {
+    try {
+      await addRoom.mutateAsync(roomForm);
+      toast({
+        title: "Room Added",
+        description: `${roomForm.name} has been added successfully`,
+      });
+      resetForm();
+      setShowAddRoom(false);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to add room. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEditRoom = (id: string) => {
+    const room = rooms.find(r => r.id === id);
+    if (room) {
+      setEditingRoom({
+        id,
+        data: {
+          name: room.name,
+          capacity: room.capacity,
+          location: room.location,
+          phone: room.phone,
+          noOfChairs: room.noOfChairs,
+          hasTV: room.hasTV,
+          hasMonitor: room.hasMonitor,
+          hasBoard: room.hasBoard,
+          isWorking: room.isWorking
+        }
+      });
+      setRoomForm({
+        name: room.name,
+        capacity: room.capacity,
+        location: room.location,
+        phone: room.phone,
+        noOfChairs: room.noOfChairs,
+        hasTV: room.hasTV,
+        hasMonitor: room.hasMonitor,
+        hasBoard: room.hasBoard,
+        isWorking: room.isWorking
+      });
+      setShowAddRoom(true);
+    }
+  };
+
+  const handleUpdateRoom = async () => {
+    if (!editingRoom) return;
+    try {
+      await editRoom.mutateAsync({
+        id: editingRoom.id,
+        roomData: roomForm
+      });
+      toast({
+        title: "Room Updated",
+        description: `${roomForm.name} has been updated successfully`,
+      });
+      resetForm();
+      setShowAddRoom(false);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update room. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteRoom = async (id: string) => {
+    try {
+      await deleteRoom.mutateAsync(id);
+      toast({
+        title: "Room Deleted",
+        description: "Room has been removed successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete room. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const filteredRooms = rooms.filter(room => {
     const matchesSearch = room.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesLocation = locationFilter === 'all' || room.location === locationFilter;
-    const matchesStatus = statusFilter === 'all' || 
-      (statusFilter === 'working' && room.isWorking) ||
-      (statusFilter === 'not-working' && !room.isWorking);
-    
+    const matchesStatus = statusFilter === 'all' ||
+      (statusFilter === 'working' && room.isWorking === 1) ||
+      (statusFilter === 'not-working' && room.isWorking === 0);
+
     return matchesSearch && matchesLocation && matchesStatus;
   });
 
   const uniqueLocations = [...new Set(rooms.map(room => room.location))];
+
+  if (error) {
+    return (
+      <div className="p-4">
+        <h2 className="text-2xl font-bold text-red-500">Error loading rooms</h2>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -126,7 +164,12 @@ export const RoomsPage: React.FC = () => {
             Manage meeting rooms, their facilities, and availability
           </p>
         </div>
-        <Dialog open={showAddRoom} onOpenChange={setShowAddRoom}>
+        <Dialog open={showAddRoom} onOpenChange={(open) => {
+          if (!open) {
+            resetForm();
+          }
+          setShowAddRoom(open);
+        }}>
           <DialogTrigger asChild>
             <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
               <Plus className="w-4 h-4 mr-2" />
@@ -135,9 +178,9 @@ export const RoomsPage: React.FC = () => {
           </DialogTrigger>
           <DialogContent className="sm:max-w-[600px]">
             <DialogHeader>
-              <DialogTitle>Add New Room</DialogTitle>
+              <DialogTitle>{editingRoom ? 'Edit Room' : 'Add New Room'}</DialogTitle>
               <DialogDescription>
-                Create a new meeting room with all the necessary details and amenities.
+                {editingRoom ? 'Update room details and amenities.' : 'Create a new meeting room with all the necessary details and amenities.'}
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -147,7 +190,7 @@ export const RoomsPage: React.FC = () => {
                   <Input
                     id="name"
                     value={roomForm.name}
-                    onChange={(e) => setRoomForm({...roomForm, name: e.target.value})}
+                    onChange={(e) => setRoomForm({ ...roomForm, name: e.target.value })}
                   />
                 </div>
                 <div className="grid gap-2">
@@ -156,7 +199,7 @@ export const RoomsPage: React.FC = () => {
                     id="capacity"
                     type="number"
                     value={roomForm.capacity}
-                    onChange={(e) => setRoomForm({...roomForm, capacity: e.target.value})}
+                    onChange={(e) => setRoomForm({ ...roomForm, capacity: e.target.value })}
                   />
                 </div>
               </div>
@@ -166,7 +209,7 @@ export const RoomsPage: React.FC = () => {
                   <Input
                     id="location"
                     value={roomForm.location}
-                    onChange={(e) => setRoomForm({...roomForm, location: e.target.value})}
+                    onChange={(e) => setRoomForm({ ...roomForm, location: e.target.value })}
                   />
                 </div>
                 <div className="grid gap-2">
@@ -174,7 +217,7 @@ export const RoomsPage: React.FC = () => {
                   <Input
                     id="phone"
                     value={roomForm.phone}
-                    onChange={(e) => setRoomForm({...roomForm, phone: e.target.value})}
+                    onChange={(e) => setRoomForm({ ...roomForm, phone: e.target.value })}
                   />
                 </div>
               </div>
@@ -183,8 +226,8 @@ export const RoomsPage: React.FC = () => {
                 <Input
                   id="chairs"
                   type="number"
-                  value={roomForm.chairs}
-                  onChange={(e) => setRoomForm({...roomForm, chairs: e.target.value})}
+                  value={roomForm.noOfChairs}
+                  onChange={(e) => setRoomForm({ ...roomForm, noOfChairs: e.target.value })}
                 />
               </div>
               <div className="space-y-4">
@@ -193,32 +236,32 @@ export const RoomsPage: React.FC = () => {
                   <div className="flex items-center space-x-2">
                     <Switch
                       id="hasTV"
-                      checked={roomForm.hasTV}
-                      onCheckedChange={(checked) => setRoomForm({...roomForm, hasTV: checked})}
+                      checked={roomForm.hasTV === 1}
+                      onCheckedChange={(checked) => setRoomForm({ ...roomForm, hasTV: checked ? 1 : 0 })}
                     />
                     <Label htmlFor="hasTV">Has TV</Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Switch
                       id="hasMonitor"
-                      checked={roomForm.hasMonitor}
-                      onCheckedChange={(checked) => setRoomForm({...roomForm, hasMonitor: checked})}
+                      checked={roomForm.hasMonitor === 1}
+                      onCheckedChange={(checked) => setRoomForm({ ...roomForm, hasMonitor: checked ? 1 : 0 })}
                     />
                     <Label htmlFor="hasMonitor">Has Monitor</Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Switch
                       id="hasBoard"
-                      checked={roomForm.hasBoard}
-                      onCheckedChange={(checked) => setRoomForm({...roomForm, hasBoard: checked})}
+                      checked={roomForm.hasBoard === 1}
+                      onCheckedChange={(checked) => setRoomForm({ ...roomForm, hasBoard: checked ? 1 : 0 })}
                     />
                     <Label htmlFor="hasBoard">Has Whiteboard</Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Switch
                       id="isWorking"
-                      checked={roomForm.isWorking}
-                      onCheckedChange={(checked) => setRoomForm({...roomForm, isWorking: checked})}
+                      checked={roomForm.isWorking === 1}
+                      onCheckedChange={(checked) => setRoomForm({ ...roomForm, isWorking: checked ? 1 : 0 })}
                     />
                     <Label htmlFor="isWorking">Is Working</Label>
                   </div>
@@ -226,11 +269,14 @@ export const RoomsPage: React.FC = () => {
               </div>
             </div>
             <div className="flex justify-end space-x-4">
-              <Button variant="outline" onClick={() => setShowAddRoom(false)}>
+              <Button variant="outline" onClick={() => {
+                setShowAddRoom(false);
+                resetForm();
+              }}>
                 Cancel
               </Button>
-              <Button onClick={handleAddRoom}>
-                Add Room
+              <Button onClick={editingRoom ? handleUpdateRoom : handleAddRoom}>
+                {editingRoom ? 'Update Room' : 'Add Room'}
               </Button>
             </div>
           </DialogContent>
@@ -307,44 +353,54 @@ export const RoomsPage: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRooms.map((room) => (
-                  <TableRow key={room.id}>
-                    <TableCell className="font-medium">{room.name}</TableCell>
-                    <TableCell>{room.capacity}</TableCell>
-                    <TableCell>{room.location}</TableCell>
-                    <TableCell>{room.phone}</TableCell>
-                    <TableCell>{room.chairs}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        {room.hasTV && <Badge variant="secondary">TV</Badge>}
-                        {room.hasMonitor && <Badge variant="secondary">Monitor</Badge>}
-                        {room.hasBoard && <Badge variant="secondary">Board</Badge>}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={room.isWorking ? "default" : "destructive"}>
-                        {room.isWorking ? "Working" : "Not Working"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm">
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          <Calendar className="w-4 h-4" />
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleDeleteRoom(room.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center">Loading...</TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  filteredRooms.map((room) => (
+                    <TableRow key={room.id}>
+                      <TableCell className="font-medium">{room.name}</TableCell>
+                      <TableCell>{room.capacity}</TableCell>
+                      <TableCell>{room.location}</TableCell>
+                      <TableCell>{room.phone}</TableCell>
+                      <TableCell>{room.noOfChairs}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          {room.hasTV === 1 && <Badge variant="secondary">TV</Badge>}
+                          {room.hasMonitor === 1 && <Badge variant="secondary">Monitor</Badge>}
+                          {room.hasBoard === 1 && <Badge variant="secondary">Board</Badge>}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={room.isWorking === 1 ? "default" : "destructive"}>
+                          {room.isWorking === 1 ? "Working" : "Not Working"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditRoom(room.id)}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button variant="outline" size="sm">
+                            <Calendar className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteRoom(room.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>

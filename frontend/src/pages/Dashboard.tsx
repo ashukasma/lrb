@@ -1,45 +1,22 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { BookingModal } from '@/components/modals/BookingModal';
-import { Calendar, Users, Tv, Monitor, Layout, Clock } from 'lucide-react';
+import { BookingModal } from '@/pages/modals/BookingModal';
+import { Calendar, Users, Tv, Monitor, Layout, Clock, Building2, Phone, Sofa, CheckCircle2, XCircle } from 'lucide-react';
+import { useRooms } from '@/hooks/useRooms';
 
-const sampleRooms = [
-  {
-    id: 1,
-    name: "Conference Room Alpha",
-    capacity: 12,
-    location: "Floor 1",
-    amenities: ["TV", "Monitor", "Whiteboard"],
-    available: true
-  },
-  {
-    id: 2,
-    name: "Meeting Room Beta",
-    capacity: 6,
-    location: "Floor 2",
-    amenities: ["Monitor", "Whiteboard"],
-    available: true
-  },
-  {
-    id: 3,
-    name: "Executive Suite",
-    capacity: 8,
-    location: "Floor 3",
-    amenities: ["TV", "Monitor"],
-    available: false
-  },
-  {
-    id: 4,
-    name: "Collaboration Hub",
-    capacity: 15,
-    location: "Floor 1",
-    amenities: ["TV", "Whiteboard"],
-    available: true
-  }
-];
+interface Room {
+  id: string;
+  name: string;
+  capacity: string;
+  location: string;
+  phone: string;
+  noOfChairs: string;
+  hasTV: number;
+  hasMonitor: number;
+  hasBoard: number;
+  isWorking: number;
+}
 
 const recentBookings = [
   {
@@ -85,26 +62,30 @@ const recentBookings = [
 ];
 
 export const Dashboard: React.FC = () => {
-  const [selectedRoom, setSelectedRoom] = useState<any>(null);
+  const { rooms, isLoading, error } = useRooms();
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
 
-  const handleBookRoom = (room: any) => {
+  const handleBookRoom = (room: Room) => {
     setSelectedRoom(room);
     setBookingModalOpen(true);
   };
 
-  const getAmenityIcon = (amenity: string) => {
-    switch (amenity) {
-      case 'TV':
-        return <Tv className="w-4 h-4" />;
-      case 'Monitor':
-        return <Monitor className="w-4 h-4" />;
-      case 'Whiteboard':
-        return <Layout className="w-4 h-4" />;
-      default:
-        return null;
-    }
-  };
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-red-500">Error loading rooms: {error.message}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -119,14 +100,16 @@ export const Dashboard: React.FC = () => {
       <div>
         <h3 className="text-xl font-semibold mb-4">Available Rooms</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {sampleRooms.map((room) => (
+          {rooms.map((room) => (
             <Card key={room.id} className="hover:shadow-lg transition-shadow duration-200">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">{room.name}</CardTitle>
-                  <Badge variant={room.available ? "default" : "secondary"}>
-                    {room.available ? "Available" : "Occupied"}
-                  </Badge>
+                  {room.isWorking ? (
+                    <CheckCircle2 className="w-5 h-5 text-green-500" />
+                  ) : (
+                    <XCircle className="w-5 h-5 text-red-500" />
+                  )}
                 </div>
                 <CardDescription className="flex items-center text-sm">
                   <Users className="w-4 h-4 mr-1" />
@@ -134,18 +117,38 @@ export const Dashboard: React.FC = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex flex-wrap gap-2">
-                  {room.amenities.map((amenity) => (
-                    <div key={amenity} className="flex items-center gap-1 text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
-                      {getAmenityIcon(amenity)}
-                      {amenity}
-                    </div>
-                  ))}
+                <div className="space-y-2">
+                  <div className="flex items-center text-sm">
+                    <Building2 className="w-4 h-4 mr-2 text-gray-500" />
+                    <span>{room.location}</span>
+                  </div>
+                  <div className="flex items-center text-sm">
+                    <Phone className="w-4 h-4 mr-2 text-gray-500" />
+                    <span>{room.phone}</span>
+                  </div>
+                  <div className="flex items-center text-sm">
+                    <Sofa className="w-4 h-4 mr-2 text-gray-500" />
+                    <span>{room.noOfChairs} chairs</span>
+                  </div>
                 </div>
-                <Button 
+                <div className="flex flex-wrap gap-2">
+                  <div className={`flex items-center gap-1 text-xs ${room.hasTV === 1 ? 'bg-green-100 dark:bg-green-900' : 'bg-gray-100 dark:bg-gray-800'} px-2 py-1 rounded`}>
+                    <Tv className={`w-4 h-4 ${room.hasTV === 1 ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`} />
+                    TV
+                  </div>
+                  <div className={`flex items-center gap-1 text-xs ${room.hasMonitor === 1 ? 'bg-green-100 dark:bg-green-900' : 'bg-gray-100 dark:bg-gray-800'} px-2 py-1 rounded`}>
+                    <Monitor className={`w-4 h-4 ${room.hasMonitor === 1 ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`} />
+                    Monitor
+                  </div>
+                  <div className={`flex items-center gap-1 text-xs ${room.hasBoard === 1 ? 'bg-green-100 dark:bg-green-900' : 'bg-gray-100 dark:bg-gray-800'} px-2 py-1 rounded`}>
+                    <Layout className={`w-4 h-4 ${room.hasBoard === 1 ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`} />
+                    Board
+                  </div>
+                </div>
+                <Button
                   className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
                   onClick={() => handleBookRoom(room)}
-                  disabled={!room.available}
+                  disabled={!room.isWorking}
                 >
                   <Calendar className="w-4 h-4 mr-2" />
                   Book Room
