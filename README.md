@@ -1,20 +1,26 @@
 # Lucent Office Meeting Room Booking Portal
 
-A modern web application for booking and managing meeting rooms at Lucent Innovation. The portal allows users to book conference rooms, manage schedules, and track usage analytics.
+A modern, full-stack web application for booking and managing meeting rooms at Lucent Innovation. The portal enables users to book conference rooms, manage schedules, and track usage analytics with a secure, user-friendly interface.
 
-## Features
+---
 
-- Secure login with OTP verification (email or phone)
-- Dashboard for booking and managing meeting rooms
-- Responsive UI built with React, Vite, Tailwind CSS, and shadcn-ui
-- Backend API for authentication and room management
+## ✨ Features
 
-## Project Structure
+- **Secure OTP Login:** Email or phone-based OTP authentication.
+- **Room Management:** Book, edit, and delete meeting rooms.
+- **Dashboard:** View and manage all bookings and room schedules.
+- **Responsive UI:** Built with React, Vite, Tailwind CSS, and shadcn-ui.
+- **Analytics:** Track room usage and booking trends.
+- **REST API:** Node.js/Express backend for authentication and room management.
+
+---
+
+## 🗂️ Project Structure
 
 ```
 backend/
-  db.js
-  server.js
+  config/
+    db.js
   middleware/
     auth.js
   routes/
@@ -22,6 +28,8 @@ backend/
     otpRoutes.js
     roomRoutes.js
     userRoutes.js
+  server.js
+
 frontend/
   src/
     App.tsx
@@ -29,22 +37,30 @@ frontend/
     pages/
       auth/
         LoginScreen.tsx
+    components/
+    hooks/
   public/
   index.html
   package.json
 ```
 
-## Technologies Used
+---
+
+## 🛠️ Technologies Used
 
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS, shadcn-ui
-- **Backend:** Node.js, Express
+- **Backend:** Node.js, Express, MySQL (or compatible DB)
+- **Other:** React Router, React Query, Zod, Lucide Icons
 
-## Getting Started
+---
+
+## 🚀 Getting Started
 
 ### Prerequisites
 
-- Node.js (use [nvm](https://github.com/nvm-sh/nvm#installing-and-updating) for easy installation)
-- npm
+- [Node.js](https://nodejs.org/) (recommend using [nvm](https://github.com/nvm-sh/nvm))
+- npm (comes with Node.js)
+- MySQL or compatible database
 
 ### Setup
 
@@ -58,20 +74,26 @@ cd <YOUR_PROJECT_NAME>
 #### 2. Install dependencies
 
 ```sh
-# For frontend
+# Frontend
 cd frontend
 npm install
 
-# For backend
+# Backend
 cd ../backend
 npm install
 ```
 
 #### 3. Configure environment variables
 
-- Copy `.env.example` to `.env` in both `frontend/` and `backend/` and update values as needed.
+- Copy `.env.example` to `.env` in both `frontend/` and `backend/`.
+- Update the values as needed (API URLs, DB credentials, secrets, etc.).
 
-#### 4. Start the development servers
+#### 4. Set up the database
+
+- Create a MySQL database and user.
+- Run the provided SQL migrations or schema (if available).
+
+#### 5. Start the development servers
 
 ```sh
 # In one terminal, start the backend
@@ -86,20 +108,41 @@ npm run dev
 - Frontend: [http://localhost:5173](http://localhost:5173)
 - Backend: [http://localhost:3000](http://localhost:3000)
 
-## Deployment
+---
 
-- The frontend can be deployed using [Lovable](https://lovable.dev/projects/9c303eec-623f-4b93-9026-6bf304c822a8) or any static hosting provider.
-- The backend can be deployed to any Node.js-compatible server.
+## 🏗️ Deployment
 
-## Custom Domain
+- **Frontend:** Deploy to any hosting provider.
+- **Backend:** Deploy to any Node.js-compatible server (e.g., Azure, AWS, DigitalOcean).
 
-To connect a custom domain, follow the instructions in the Lovable dashboard under Project > Settings > Domains.
+---
 
-## License
+## 🌐 Custom Domain
+
+To connect a custom domain, follow the instructions with hosting.
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/YourFeature`)
+3. Commit your changes (`git commit -am 'Add some feature'`)
+4. Push to the branch (`git push origin feature/YourFeature`)
+5. Open a pull request
+
+---
+
+## 📄 License
 
 MIT
 
 ---
 
+## 📄 Author
+
 **Ashish Kasama**
+
 **Lucent Innovation**
+
+---
