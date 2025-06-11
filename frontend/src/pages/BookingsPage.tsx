@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,100 +12,179 @@ import { Label } from '@/components/ui/label';
 import { Calendar as CalendarIcon, Filter, Search, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/components/ui/use-toast';
 
-const sampleBookings = [
-  {
-    id: 1,
-    room: "Conference Room Alpha",
-    user: "Sarah Johnson",
-    date: "2024-06-09",
-    startTime: "09:00",
-    endTime: "10:30",
-    reason: "Team standup meeting",
-    status: "upcoming"
-  },
-  {
-    id: 2,
-    room: "Meeting Room Beta",
-    user: "Mike Chen",
-    date: "2024-06-08",
-    startTime: "14:00",
-    endTime: "15:00",
-    reason: "Client presentation",
-    status: "past"
-  },
-  {
-    id: 3,
-    room: "Executive Suite",
-    user: "John Doe",
-    date: "2024-06-08",
-    startTime: "10:00",
-    endTime: "12:00",
-    reason: "Board meeting",
-    status: "past"
-  },
-  {
-    id: 4,
-    room: "Collaboration Hub",
-    user: "Emma Wilson",
-    date: "2024-06-07",
-    startTime: "16:00",
-    endTime: "17:30",
-    reason: "Project planning session with development team",
-    status: "past"
-  },
-  {
-    id: 5,
-    room: "Conference Room Alpha",
-    user: "David Brown",
-    date: "2024-06-10",
-    startTime: "11:00",
-    endTime: "12:00",
-    reason: "Code review",
-    status: "upcoming"
-  },
-  {
-    id: 6,
-    room: "Meeting Room Beta",
-    user: "Lisa Anderson",
-    date: "2024-06-11",
-    startTime: "15:30",
-    endTime: "16:30",
-    reason: "Weekly team sync",
-    status: "upcoming"
-  }
-];
+interface Booking {
+  id: number;
+  roomId: number;
+  employeeId: string;
+  startTime: string;
+  endTime: string;
+  title: string;
+  roomName: string;
+  employeeName: string;
+  isCancelled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
 
-const users = ["Sarah Johnson", "Mike Chen", "John Doe", "Emma Wilson", "David Brown", "Lisa Anderson"];
-const rooms = ["Conference Room Alpha", "Meeting Room Beta", "Executive Suite", "Collaboration Hub"];
+interface Room {
+  id: number;
+  name: string;
+}
+
+interface User {
+  id: string;
+  name: string;
+}
 
 export const BookingsPage: React.FC = () => {
-  const [bookings] = useState(sampleBookings);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [userFilter, setUserFilter] = useState('all');
   const [roomFilter, setRoomFilter] = useState('all');
   const [showPast, setShowPast] = useState(true);
   const [dateFrom, setDateFrom] = useState<Date>();
   const [dateTo, setDateTo] = useState<Date>();
+  const { toast } = useToast();
+
+  // Fetch bookings
+  useEffect(() => {
+    const fetchBookings = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          throw new Error('No token found');
+        }
+
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/bookings?limit=100`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch bookings');
+        }
+
+        const data = await response.json();
+        setBookings(data.bookings);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+        toast({
+          title: "Error",
+          description: "Failed to fetch bookings",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchBookings();
+  }, [toast]);
+
+  // Fetch rooms
+  useEffect(() => {
+    const fetchRooms = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/rooms`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch rooms');
+        }
+
+        const data = await response.json();
+        setRooms(data);
+      } catch (err) {
+        console.error('Error fetching rooms:', err);
+      }
+    };
+
+    fetchRooms();
+  }, []);
+
+  // Fetch users
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/users`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch users');
+        }
+
+        const data = await response.json();
+        setUsers(data);
+      } catch (err) {
+        console.error('Error fetching users:', err);
+      }
+    };
+
+    fetchUsers();
+  }, []);
 
   const filteredBookings = bookings.filter(booking => {
-    const matchesSearch = 
-      booking.room.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      booking.user.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      booking.reason.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesUser = userFilter === 'all' || booking.user === userFilter;
-    const matchesRoom = roomFilter === 'all' || booking.room === roomFilter;
-    const matchesTimeframe = showPast || booking.status === 'upcoming';
-    
+    const matchesSearch =
+      booking.roomName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      booking.employeeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      booking.title.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesUser = userFilter === 'all' || booking.employeeId === userFilter;
+    const matchesRoom = roomFilter === 'all' || booking.roomId.toString() === roomFilter;
+    const matchesTimeframe = showPast || new Date(booking.startTime) > new Date();
+
     let matchesDateRange = true;
     if (dateFrom && dateTo) {
-      const bookingDate = new Date(booking.date);
+      const bookingDate = new Date(booking.startTime);
       matchesDateRange = bookingDate >= dateFrom && bookingDate <= dateTo;
     }
-    
+
     return matchesSearch && matchesUser && matchesRoom && matchesTimeframe && matchesDateRange;
   });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-red-500">{error}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -143,8 +221,8 @@ export const BookingsPage: React.FC = () => {
               <SelectContent>
                 <SelectItem value="all">All Users</SelectItem>
                 {users.map((user) => (
-                  <SelectItem key={user} value={user}>
-                    {user}
+                  <SelectItem key={user.id} value={user.id}>
+                    {user.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -156,8 +234,8 @@ export const BookingsPage: React.FC = () => {
               <SelectContent>
                 <SelectItem value="all">All Rooms</SelectItem>
                 {rooms.map((room) => (
-                  <SelectItem key={room} value={room}>
-                    {room}
+                  <SelectItem key={room.id} value={room.id.toString()}>
+                    {room.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -171,7 +249,7 @@ export const BookingsPage: React.FC = () => {
               <Label htmlFor="show-past">Include Past</Label>
             </div>
           </div>
-          
+
           {/* Date Range */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -257,18 +335,38 @@ export const BookingsPage: React.FC = () => {
               <TableBody>
                 {filteredBookings.map((booking) => (
                   <TableRow key={booking.id}>
-                    <TableCell className="font-medium">{booking.room}</TableCell>
-                    <TableCell>{booking.user}</TableCell>
-                    <TableCell>{format(new Date(booking.date), "PPP")}</TableCell>
+                    <TableCell className="font-medium">{booking.roomName}</TableCell>
+                    <TableCell>{booking.employeeName}</TableCell>
                     <TableCell>
-                      {booking.startTime} - {booking.endTime}
-                    </TableCell>
-                    <TableCell className="max-w-xs truncate" title={booking.reason}>
-                      {booking.reason}
+                      {new Date(booking.startTime).toLocaleDateString('en-US', {
+                        month: 'long',
+                        day: 'numeric',
+                        year: 'numeric'
+                      })}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={booking.status === 'upcoming' ? "default" : "secondary"}>
-                        {booking.status === 'upcoming' ? 'Upcoming' : 'Past'}
+                      {new Date(booking.startTime).toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                      })} - {new Date(booking.endTime).toLocaleTimeString('en-US', {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                      })}
+                    </TableCell>
+                    <TableCell className="max-w-xs truncate" title={booking.title}>
+                      {booking.title}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          booking.isCancelled ? "destructive" :
+                            new Date(booking.startTime) > new Date() ? "default" : "secondary"
+                        }
+                      >
+                        {booking.isCancelled ? 'Cancelled' :
+                          new Date(booking.startTime) > new Date() ? 'Upcoming' : 'Past'}
                       </Badge>
                     </TableCell>
                   </TableRow>
@@ -286,15 +384,37 @@ export const BookingsPage: React.FC = () => {
             <CardContent className="p-4">
               <div className="space-y-2">
                 <div className="flex justify-between items-start">
-                  <h3 className="font-medium">{booking.room}</h3>
-                  <Badge variant={booking.status === 'upcoming' ? "default" : "secondary"}>
-                    {booking.status === 'upcoming' ? 'Upcoming' : 'Past'}
+                  <h3 className="font-medium">{booking.roomName}</h3>
+                  <Badge
+                    variant={
+                      booking.isCancelled ? "destructive" :
+                        new Date(booking.startTime) > new Date() ? "default" : "secondary"
+                    }
+                  >
+                    {booking.isCancelled ? 'Cancelled' :
+                      new Date(booking.startTime) > new Date() ? 'Upcoming' : 'Past'}
                   </Badge>
                 </div>
-                <p className="text-sm text-muted-foreground">by {booking.user}</p>
-                <p className="text-sm">{format(new Date(booking.date), "PPP")}</p>
-                <p className="text-sm">{booking.startTime} - {booking.endTime}</p>
-                <p className="text-sm text-muted-foreground">{booking.reason}</p>
+                <p className="text-sm text-muted-foreground">by {booking.employeeName}</p>
+                <p className="text-sm">
+                  {new Date(booking.startTime).toLocaleDateString('en-US', {
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric'
+                  })}
+                </p>
+                <p className="text-sm">
+                  {new Date(booking.startTime).toLocaleTimeString('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                  })} - {new Date(booking.endTime).toLocaleTimeString('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                  })}
+                </p>
+                <p className="text-sm text-muted-foreground">{booking.title}</p>
               </div>
             </CardContent>
           </Card>

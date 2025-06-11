@@ -85,7 +85,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
 
         // Store user data
         localStorage.setItem('user', JSON.stringify(data.user));
-        localStorage.setItem('employeeId', data.user.employeeId);
+        localStorage.setItem('employeeId', data.user.id);
 
         // Use actual user data from API response
         onLogin(data.user);

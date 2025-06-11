@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { BookingModal } from '@/pages/modals/BookingModal';
 import { Calendar, Users, Tv, Monitor, Layout, Clock, Building2, Phone, Sofa, CheckCircle2, XCircle } from 'lucide-react';
 import { useRooms } from '@/hooks/useRooms';
+import { format } from 'date-fns';
 
 interface Room {
   id: string;
@@ -18,51 +19,64 @@ interface Room {
   isWorking: number;
 }
 
-const recentBookings = [
-  {
-    id: 1,
-    room: "Conference Room Alpha",
-    bookedBy: "Sarah Johnson",
-    date: "2024-06-09",
-    time: "09:00 - 10:30",
-    reason: "Team standup meeting"
-  },
-  {
-    id: 2,
-    room: "Meeting Room Beta",
-    bookedBy: "Mike Chen",
-    date: "2024-06-08",
-    time: "14:00 - 15:00",
-    reason: "Client presentation"
-  },
-  {
-    id: 3,
-    room: "Executive Suite",
-    bookedBy: "John Doe",
-    date: "2024-06-08",
-    time: "10:00 - 12:00",
-    reason: "Board meeting"
-  },
-  {
-    id: 4,
-    room: "Collaboration Hub",
-    bookedBy: "Emma Wilson",
-    date: "2024-06-07",
-    time: "16:00 - 17:30",
-    reason: "Project planning"
-  },
-  {
-    id: 5,
-    room: "Conference Room Alpha",
-    bookedBy: "David Brown",
-    date: "2024-06-07",
-    time: "11:00 - 12:00",
-    reason: "Code review"
-  }
-];
+interface Booking {
+  id: number;
+  roomId: number;
+  employeeId: string;
+  startTime: string;
+  endTime: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  isCancelled: boolean;
+  roomName: string;
+  employeeName: string;
+}
+
+const useBookings = () => {
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  React.useEffect(() => {
+    const fetchBookings = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          throw new Error('No token found');
+        }
+
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/bookings?limit=10&sortBy=startTime&sortOrder=DESC`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch bookings');
+        }
+
+        const data = await response.json();
+        setBookings(data.bookings);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('An error occurred'));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchBookings();
+  }, []);
+
+  return { bookings, isLoading, error };
+};
 
 export const Dashboard: React.FC = () => {
-  const { rooms, isLoading, error } = useRooms();
+  const { rooms, isLoading: roomsLoading, error: roomsError } = useRooms();
+  const { bookings, isLoading: bookingsLoading, error: bookingsError } = useBookings();
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
 
@@ -71,7 +85,7 @@ export const Dashboard: React.FC = () => {
     setBookingModalOpen(true);
   };
 
-  if (isLoading) {
+  if (roomsLoading || bookingsLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -79,13 +93,18 @@ export const Dashboard: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (roomsError || bookingsError) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-red-500">Error loading rooms: {error.message}</div>
+        <div className="text-red-500">
+          Error: {roomsError?.message || bookingsError?.message}
+        </div>
       </div>
     );
   }
+
+  // Remove the sorting and filtering since it's now handled by the API
+  const recentBookings = bookings;
 
   return (
     <div className="space-y-6">
@@ -167,30 +186,49 @@ export const Dashboard: React.FC = () => {
             Recent Bookings
           </CardTitle>
           <CardDescription>
-            Latest 5 room bookings across the organization
+            Latest 10 room bookings across the organization
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             {recentBookings.map((booking) => (
-              <div key={booking.id} className="flex items-center justify-between p-4 rounded-lg bg-gray-50 dark:bg-gray-800">
-                <div className="flex-1">
+              <div
+                key={booking.id}
+                className="flex items-center justify-between p-4 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3">
-                    <div>
-                      <p className="font-medium">{booking.room}</p>
+                    <div className="min-w-0">
+                      <p className="font-medium text-lg truncate">{booking.roomName}</p>
                       <p className="text-sm text-muted-foreground">
-                        Booked by {booking.bookedBy}
+                        Booked by {booking.employeeName}
                       </p>
                     </div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="font-medium">{booking.date}</p>
-                  <p className="text-sm text-muted-foreground">{booking.time}</p>
+                <div className="flex flex-col items-center mx-4 min-w-[120px]">
+                  <p className="font-medium text-center">
+                    {new Date(booking.startTime).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric'
+                    })}
+                  </p>
+                  <p className="text-sm text-muted-foreground text-center">
+                    {new Date(booking.startTime).toLocaleTimeString('en-US', {
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      hour12: true
+                    })} - {new Date(booking.endTime).toLocaleTimeString('en-US', {
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      hour12: true
+                    })}
+                  </p>
                 </div>
-                <div className="ml-4 max-w-xs">
-                  <p className="text-sm text-muted-foreground truncate">
-                    {booking.reason}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-center px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 truncate">
+                    {booking.title}
                   </p>
                 </div>
               </div>

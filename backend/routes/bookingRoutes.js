@@ -9,14 +9,74 @@ router.use(authenticateToken);
 // Get all bookings
 router.get('/bookings', async (req, res) => {
   try {
+    const offset = parseInt(req.query.offset) || 0;
+    const limit = parseInt(req.query.limit) || 10;
+    const sortBy = req.query.sortBy || 'startTime';
+    const sortOrder = req.query.sortOrder?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+    const startDate = req.query.startDate;
+    const roomId = req.query.roomId;
+    const employeeId = req.query.employeeId;
+
+    // Build WHERE clause based on filters
+    let whereClause = 'WHERE b.isCancelled = 0';
+    const queryParams = [];
+
+    if (startDate) {
+      whereClause += ' AND DATE(b.startTime) = ?';
+      queryParams.push(startDate);
+    }
+
+    if (roomId) {
+      whereClause += ' AND b.roomId = ?';
+      queryParams.push(roomId);
+    }
+
+    if (employeeId) {
+      whereClause += ' AND b.employeeId = ?';
+      queryParams.push(employeeId);
+    }
+
+    // Get total count for pagination
+    const [countResult] = await pool.query(
+      `SELECT COUNT(*) as total
+       FROM bookings b
+       ${whereClause}`,
+      queryParams
+    );
+    const total = countResult[0].total;
+
+    // Validate sortBy to prevent SQL injection
+    const allowedSortFields = ['startTime', 'endTime', 'createdAt', 'roomName', 'employeeName'];
+    const finalSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'startTime';
+
+    // Get paginated bookings with filters and sorting
     const [bookings] = await pool.query(
-      `SELECT b.*, r.name as roomName, r.location, r.capacity
+      `SELECT b.*, r.name as roomName, r.location, r.capacity, u.name as employeeName
        FROM bookings b
        JOIN rooms r ON b.roomId = r.id
-       WHERE b.isCancelled = 0
-       ORDER BY b.startTime DESC`
+       JOIN users u ON b.employeeId = u.id
+       ${whereClause}
+       ORDER BY ${finalSortBy} ${sortOrder}
+       LIMIT ? OFFSET ?`,
+      [...queryParams, limit, offset]
     );
-    res.json(bookings);
+
+    res.json({
+      bookings,
+      pagination: {
+        total,
+        offset,
+        limit,
+        hasMore: offset + limit < total
+      },
+      filters: {
+        startDate,
+        roomId,
+        employeeId,
+        sortBy: finalSortBy,
+        sortOrder
+      }
+    });
   } catch (err) {
     console.error('Error fetching bookings:', err);
     res.status(500).json({ message: 'Server error' });
@@ -28,9 +88,10 @@ router.get('/bookings/:id', async (req, res) => {
   const { id } = req.params;
   try {
     const [bookings] = await pool.query(
-      `SELECT b.*, r.name as roomName, r.location, r.capacity
+      `SELECT b.*, r.name as roomName, r.location, r.capacity, u.name as employeeName
        FROM bookings b
        JOIN rooms r ON b.roomId = r.id
+       JOIN users u ON b.employeeId = u.id
        WHERE b.id = ?`,
       [id]
     );
@@ -46,40 +107,49 @@ router.get('/bookings/:id', async (req, res) => {
   }
 });
 
-// Create new booking
+// Create booking
 router.post('/bookings', async (req, res) => {
   const { roomId, employeeId, startTime, endTime, title } = req.body;
 
-  if (!roomId || !employeeId || !startTime || !endTime) {
-    return res.status(400).json({ message: 'Missing required booking fields' });
-  }
-
   try {
-    // Check for overlapping bookings before inserting
-    const [overlappingBookings] = await pool.query(
-      `SELECT * FROM bookings
-       WHERE roomId = ?
+    // Format datetime for MySQL (YYYY-MM-DD HH:mm:ss)
+    const formatDateTime = (dateString) => {
+      return new Date(dateString);
+    };
+
+    const formattedStartTime = formatDateTime(startTime);
+    const formattedEndTime = formatDateTime(endTime);
+
+    // Check for overlapping bookings
+    const [overlapping] = await pool.query(
+      `SELECT * FROM bookings 
+       WHERE roomId = ? 
        AND isCancelled = 0
        AND (
-         (startTime < ? AND endTime > ?)
-         OR (startTime < ? AND endTime > ?)
-         OR (startTime >= ? AND endTime <= ?)
+         (startTime <= ? AND endTime > ?) OR
+         (startTime < ? AND endTime >= ?) OR
+         (startTime >= ? AND endTime <= ?)
        )`,
-      [roomId, endTime, startTime, endTime, startTime, startTime, endTime]
+      [roomId, formattedEndTime, formattedStartTime, formattedEndTime, formattedStartTime, formattedStartTime, formattedEndTime]
     );
 
-    if (overlappingBookings.length > 0) {
-      return res.status(409).json({ message: 'Room is already booked for the selected time' });
+    if (overlapping.length > 0) {
+      return res.status(400).json({ message: 'Room is already booked for this time slot' });
     }
 
+    // Create booking
     const [result] = await pool.query(
       'INSERT INTO bookings (roomId, employeeId, startTime, endTime, title) VALUES (?, ?, ?, ?, ?)',
-      [roomId, employeeId, startTime, endTime, title]
+      [roomId, employeeId, formattedStartTime, formattedEndTime, title]
     );
-    res.status(201).json({ message: 'Booking created successfully', bookingId: result.insertId });
+
+    res.status(201).json({
+      message: 'Booking created successfully',
+      bookingId: result.insertId
+    });
   } catch (err) {
     console.error('Error creating booking:', err);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Error creating booking', error: err.message });
   }
 });
 
@@ -178,16 +248,41 @@ router.delete('/bookings/:id', async (req, res) => {
 router.get('/bookings/employee/:employeeId', async (req, res) => {
   const { employeeId } = req.params;
   try {
-    const [bookings] = await pool.query(
-      `SELECT b.*, r.name as roomName, r.location, r.capacity
+    const offset = parseInt(req.query.offset) || 0;
+    const limit = parseInt(req.query.limit) || 10;
+
+    // Get total count for pagination
+    const [countResult] = await pool.query(
+      `SELECT COUNT(*) as total
        FROM bookings b
-       JOIN rooms r ON b.roomId = r.id
        WHERE b.employeeId = ?
-       AND b.isCancelled = 0
-       ORDER BY b.startTime DESC`,
+       AND b.isCancelled = 0`,
       [employeeId]
     );
-    res.json(bookings);
+    const total = countResult[0].total;
+
+    // Get paginated bookings
+    const [bookings] = await pool.query(
+      `SELECT b.*, r.name as roomName, r.location, r.capacity, u.name as employeeName
+       FROM bookings b
+       JOIN rooms r ON b.roomId = r.id
+       JOIN users u ON b.employeeId = u.id
+       WHERE b.employeeId = ?
+       AND b.isCancelled = 0
+       ORDER BY b.startTime DESC
+       LIMIT ? OFFSET ?`,
+      [employeeId, limit, offset]
+    );
+
+    res.json({
+      bookings,
+      pagination: {
+        total,
+        offset,
+        limit,
+        hasMore: offset + limit < total
+      }
+    });
   } catch (err) {
     console.error('Error fetching employee bookings:', err);
     res.status(500).json({ message: 'Server error' });
