@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,6 +33,7 @@ export const UsersPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showAddUser, setShowAddUser] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [userForm, setUserForm] = useState({
     id: '',
     employeeId: '',
@@ -47,6 +48,24 @@ export const UsersPage: React.FC = () => {
   const [offset, setOffset] = useState(0);
   const [totalItems, setTotalItems] = useState(0);
   const [hasMore, setHasMore] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout>();
+
+  // Debounce search term
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    searchTimeoutRef.current = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300); // 300ms delay
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchTerm]);
 
   // Fetch users with pagination
   useEffect(() => {
@@ -61,7 +80,7 @@ export const UsersPage: React.FC = () => {
         const params = new URLSearchParams({
           limit: itemsPerPage.toString(),
           offset: offset.toString(),
-          ...(searchTerm && { search: searchTerm })
+          ...(debouncedSearchTerm && { search: debouncedSearchTerm })
         });
 
         const response = await fetch(
@@ -78,15 +97,11 @@ export const UsersPage: React.FC = () => {
         }
 
         const data: PaginatedResponse = await response.json();
-
-
         setUsers(data.users);
         setTotalItems(data.pagination.total);
         setHasMore(data.pagination.hasMore);
-
-
       } catch (err) {
-        console.error('Error fetching users:', err); // Debug log
+        console.error('Error fetching users:', err);
         setError(err instanceof Error ? err.message : 'An error occurred');
         toast({
           title: "Error",
@@ -99,7 +114,7 @@ export const UsersPage: React.FC = () => {
     };
 
     fetchUsers();
-  }, [offset, itemsPerPage, searchTerm]);
+  }, [offset, itemsPerPage, debouncedSearchTerm]);
 
   // Add effect to log state changes
   useEffect(() => {

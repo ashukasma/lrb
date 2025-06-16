@@ -3,11 +3,73 @@ const router = express.Router();
 const db = require('../db');
 const authenticateToken = require('../middleware/auth');
 
-// Get all rooms
+// Get all rooms with search, filtering, and pagination
 router.get('/rooms', authenticateToken, async (req, res) => {
   try {
-    const [rooms] = await db.query('SELECT * FROM rooms');
-    res.json(rooms);
+    const {
+      limit = 10,
+      offset = 0,
+      search = '',
+      location = '',
+      status = ''
+    } = req.query;
+
+    // Build the base query
+    let query = 'SELECT * FROM rooms';
+    const queryParams = [];
+    const conditions = [];
+
+    // Add search condition if search term is provided
+    if (search) {
+      conditions.push('(name LIKE ? OR location LIKE ?)');
+      const searchTerm = `%${search}%`;
+      queryParams.push(searchTerm, searchTerm);
+    }
+
+    // Add location filter
+    if (location && location !== 'all') {
+      conditions.push('location = ?');
+      queryParams.push(location);
+    }
+
+    // Add status filter
+    if (status && status !== 'all') {
+      conditions.push('isWorking = ?');
+      queryParams.push(status === 'working' ? 1 : 0);
+    }
+
+    // Add WHERE clause if there are any conditions
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    // Get total count for pagination
+    let countQuery = 'SELECT COUNT(*) as total FROM rooms';
+    if (conditions.length > 0) {
+      countQuery += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    // Add pagination
+    query += ' LIMIT ? OFFSET ?';
+    queryParams.push(parseInt(limit), parseInt(offset));
+
+    // Execute both queries in parallel
+    const [rooms, countResult] = await Promise.all([
+      db.query(query, queryParams),
+      db.query(countQuery, queryParams.slice(0, -2)) // Remove limit and offset for count
+    ]);
+
+    const total = countResult[0][0].total;
+
+    res.json({
+      rooms: rooms[0],
+      pagination: {
+        total,
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        hasMore: total > (parseInt(offset) + parseInt(limit))
+      }
+    });
   } catch (error) {
     console.error('Error fetching rooms:', error);
     res.status(500).json({ message: 'Error fetching rooms' });

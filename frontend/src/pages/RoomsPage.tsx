@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRooms } from '@/hooks/useRooms';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,8 +17,69 @@ export const RoomsPage: React.FC = () => {
   const [showAddRoom, setShowAddRoom] = useState(false);
   const [editingRoom, setEditingRoom] = useState<{ id: string; data: typeof roomForm } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [locationFilter, setLocationFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const searchTimeoutRef = useRef<NodeJS.Timeout>();
+
+  // Debounce search term
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    searchTimeoutRef.current = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300); // 300ms delay
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchTerm]);
+
+  // Fetch rooms with filters
+  useEffect(() => {
+    const fetchRooms = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const params = new URLSearchParams({
+          ...(debouncedSearchTerm && { search: debouncedSearchTerm }),
+          ...(locationFilter !== 'all' && { location: locationFilter }),
+          ...(statusFilter !== 'all' && { status: statusFilter })
+        });
+
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/rooms?${params.toString()}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch rooms');
+        }
+
+        const data = await response.json();
+        // Update the rooms state through the useRooms hook
+        // You'll need to modify your useRooms hook to handle this
+      } catch (err) {
+        console.error('Error fetching rooms:', err);
+        toast({
+          title: "Error",
+          description: "Failed to fetch rooms",
+          variant: "destructive",
+        });
+      }
+    };
+
+    fetchRooms();
+  }, [debouncedSearchTerm, locationFilter, statusFilter]);
 
   const [roomForm, setRoomForm] = useState({
     name: '',

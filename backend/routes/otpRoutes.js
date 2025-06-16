@@ -15,7 +15,7 @@ router.post('/send-otp', async (req, res) => {
 
   const { email, phone } = req.body;
   console.log(req.body);
-  
+
   if (!email || !phone) {
     return res.status(400).json({ message: 'Email and phone number are required' });
   }
@@ -35,7 +35,7 @@ router.post('/send-otp', async (req, res) => {
     const otp = Math.floor(100000 + Math.random() * 900000);
     const url = `https://control.msg91.com/api/v5/otp?otp_expiry=10&template_id=${MSG91_TEMPLATE_ID}&mobile=+91${phone}&authkey=${MSG91_AUTH_KEY}&realTimeResponse=`;
     console.log(url);
-    
+
     // Send OTP via MSG91 API
     const msg91Response = await axios.post(
       url,
@@ -74,8 +74,8 @@ router.post('/verify-otp', async (req, res) => {
   }
 
   console.log("", `Verifying OTP for phone: ${phone}, OTP: ${otp}`);
-  
-  
+
+
 
   const options = {
     method: 'GET',
@@ -85,7 +85,8 @@ router.post('/verify-otp', async (req, res) => {
   };
 
   try {
-    const { data } = await axios.request(options);
+    const response = await axios.request(options);
+    let data = response.data;
     if (data && data.type === 'success') {
       // Get user data after successful OTP verification
       const [users] = await pool.query(

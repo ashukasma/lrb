@@ -179,8 +179,41 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     try {
       setIsLoading(true);
       const token = localStorage.getItem('token');
-      const userId = localStorage.getItem('user').id;
-
+      // string to JSOn and parse id from user object
+      if (!token) {
+        toast({
+          title: "Error",
+          description: "Please login to book a room",
+          variant: "destructive",
+        });
+        return;
+      }
+      const user = localStorage.getItem('user');
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "Please login to book a room",
+          variant: "destructive",
+        });
+        return;
+      }
+      const userObj = JSON.parse(user);
+      // Assuming user object has an id property
+      if (!userObj || !userObj.id) {
+        toast({
+          title: "Error",
+          description: "User ID not found. Please login again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      // Use userObj.id directly
+      // const userId = userObj.id;
+      // If user is a string, parse it to get the id
+      // If user is an object, get the id directly
+      const userId = userObj.id ;
+      
+    
       if (!token || !userId) {
         toast({
           title: "Error",

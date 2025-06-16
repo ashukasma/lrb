@@ -15,25 +15,28 @@ const upload = multer({ dest: 'uploads/' }); // Temporary upload folder
 router.get('/users', async (req, res) => {
   try {
     const {
-      limit = 2000,
+      limit = 10,
       offset = 0,
       search = '',
       sortBy = 'name',
       sortOrder = 'asc'
     } = req.query;
 
-    // Build the base query
-    let query = 'SELECT id, name, email, phone_number, employeeId FROM users';
+    // Build the base query with optimized search
+    let query = `
+      SELECT SQL_CALC_FOUND_ROWS 
+        id, name, email, phone_number, employeeId 
+      FROM users
+    `;
     const queryParams = [];
 
     // Add search condition if search term is provided
     if (search) {
-      query += ' WHERE name LIKE ? OR email LIKE ? OR phone_number LIKE ? OR employeeId LIKE ?';
-      const searchTerm = `%${search}%`;
-      queryParams.push(searchTerm, searchTerm, searchTerm, searchTerm);
+      query += ' WHERE MATCH(name, email, phone_number, employeeId) AGAINST(? IN BOOLEAN MODE)';
+      queryParams.push(search);
     }
 
-    // Add sorting
+    // Add sorting with validation
     const allowedSortFields = ['name', 'email', 'phone_number', 'created_at', 'employeeId'];
     const sanitizedSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'name';
     const sanitizedSortOrder = sortOrder.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
@@ -43,34 +46,13 @@ router.get('/users', async (req, res) => {
     query += ' LIMIT ? OFFSET ?';
     queryParams.push(parseInt(limit), parseInt(offset));
 
-    // Get total count for pagination
-    let countQuery = 'SELECT COUNT(*) as total FROM users';
-    let countParams = [];
-    
-    if (search) {
-      countQuery += ' WHERE name LIKE ? OR email LIKE ? OR phone_number LIKE ? OR employeeId LIKE ?';
-      const searchTerm = `%${search}%`;
-      countParams = [searchTerm, searchTerm, searchTerm, searchTerm];
-    }
-
-    console.log('Executing queries:', {
-      query,
-      queryParams,
-      countQuery,
-      countParams
-    });
-
-    const [users, countResult] = await Promise.all([
+    // Execute queries in parallel for better performance
+    const [users, [countResult]] = await Promise.all([
       pool.query(query, queryParams),
-      pool.query(countQuery, countParams)
+      pool.query('SELECT FOUND_ROWS() as total')
     ]);
 
-    console.log('Query results:', {
-      usersCount: users[0].length,
-      totalCount: countResult[0][0].total
-    });
-
-    const total = parseInt(countResult[0][0].total);
+    const total = countResult.total;
 
     res.json({
       users: users[0],
@@ -85,9 +67,7 @@ router.get('/users', async (req, res) => {
     console.error('Error fetching users:', err);
     res.status(500).json({ 
       message: 'Failed to fetch users', 
-      error: err.message,
-      sqlMessage: err.sqlMessage,
-      sql: err.sql
+      error: err.message
     });
   }
 });
